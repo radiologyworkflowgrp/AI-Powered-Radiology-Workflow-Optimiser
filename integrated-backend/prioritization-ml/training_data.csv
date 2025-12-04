@@ -1,0 +1,121 @@
+symptoms_text,label
+"severe chest pain radiating to left arm, shortness of breath, sweating",1
+"crushing chest pain, difficulty breathing, nausea",1
+"sudden severe headache, confusion, loss of consciousness",1
+"severe bleeding from head wound, dizziness",1
+"difficulty breathing, wheezing, severe allergic reaction",1
+"unconscious, not responding, weak pulse",1
+"severe abdominal pain, rigid abdomen, vomiting blood",1
+"seizure, convulsions, loss of consciousness",1
+"severe burns covering large area, extreme pain",1
+"stabbing chest pain, rapid heartbeat, cold sweats",1
+"stroke symptoms, facial drooping, arm weakness, speech difficulty",1
+"severe trauma from accident, multiple injuries",1
+"choking, cannot breathe, turning blue",1
+"cardiac arrest, no pulse, not breathing",1
+"severe asthma attack, cannot catch breath",1
+"anaphylactic shock, swelling, difficulty breathing",1
+"gunshot wound, severe bleeding",1
+"severe head injury, bleeding from ears, confusion",1
+"heart attack symptoms, chest pressure, left arm pain",1
+"respiratory distress, gasping for air, cyanosis",1
+"moderate fever 102F, persistent cough, body aches",2
+"vomiting and diarrhea for 2 days, dehydration",2
+"severe headache, sensitivity to light, neck stiffness",2
+"abdominal pain, nausea, loss of appetite",2
+"high fever 103F, chills, muscle pain",2
+"persistent cough with green phlegm, chest tightness",2
+"back pain radiating down leg, numbness",2
+"severe sore throat, difficulty swallowing, fever",2
+"migraine headache, nausea, visual disturbances",2
+"urinary tract infection symptoms, burning, frequent urination",2
+"moderate asthma, wheezing, using inhaler frequently",2
+"infected wound, redness, swelling, pus",2
+"kidney stone pain, severe flank pain, blood in urine",2
+"pneumonia symptoms, fever, cough, chest pain",2
+"broken bone, swelling, severe pain, cannot move",2
+"deep cut requiring stitches, bleeding controlled",2
+"sprained ankle, swelling, moderate pain, difficulty walking",2
+"severe allergic reaction, hives, itching, swelling",2
+"gastroenteritis, stomach cramps, diarrhea, vomiting",2
+"bronchitis, productive cough, fever, fatigue",2
+"minor headache, feeling tired",3
+"slight cough, no fever, feeling okay",3
+"mild sore throat, no other symptoms",3
+"minor cut, cleaned and bandaged",3
+"slight nausea, no vomiting",3
+"mild cold symptoms, runny nose, sneezing",3
+"minor bruise, slight pain",3
+"mild stomach ache, no other symptoms",3
+"slight dizziness, feeling better after rest",3
+"minor rash, no itching or pain",3
+"mild fatigue, no other symptoms",3
+"slight muscle soreness from exercise",3
+"minor scrape, cleaned wound",3
+"mild indigestion, no severe pain",3
+"slight congestion, no fever",3
+"minor back ache, improves with rest",3
+"mild anxiety, no physical symptoms",3
+"slight joint pain, no swelling",3
+"minor sunburn, slight redness",3
+"mild insomnia, otherwise feeling fine",3
+"chest pain and difficulty breathing, severe",1
+"heart palpitations, chest tightness, shortness of breath",1
+"severe bleeding that won't stop, feeling faint",1
+"head injury from fall, confusion, vomiting",1
+"severe allergic reaction to food, throat swelling",1
+"sudden vision loss, severe eye pain",1
+"severe abdominal pain, fever, vomiting",1
+"compound fracture, bone visible, severe pain",1
+"severe dehydration, unable to keep fluids down",1
+"diabetic emergency, very high blood sugar, confusion",1
+"fever 101F, cough, fatigue, body aches",2
+"ear infection, pain, fever, hearing loss",2
+"moderate burn, blistering, pain",2
+"twisted knee, swelling, moderate pain",2
+"food poisoning, vomiting, diarrhea, cramps",2
+"moderate asthma, using rescue inhaler",2
+"cellulitis, red streaks, swelling, fever",2
+"moderate dehydration, dry mouth, dizziness",2
+"pulled muscle, pain with movement, swelling",2
+"moderate allergic reaction, hives, itching",2
+"runny nose, sneezing, no fever",3
+"minor headache, relieved by rest",3
+"slight cough, no other symptoms",3
+"minor insect bite, slight swelling",3
+"mild constipation, no pain",3
+"slight nausea after eating",3
+"minor skin irritation, no infection",3
+"mild stress, no physical symptoms",3
+"slight bloating, no severe pain",3
+"minor toothache, manageable pain",3
+"severe chest pain, crushing sensation, radiating to jaw",1
+"difficulty breathing, cannot speak full sentences",1
+"severe bleeding from deep laceration",1
+"loss of consciousness, unresponsive",1
+"severe allergic reaction, facial swelling, difficulty breathing",1
+"stroke symptoms, sudden weakness one side of body",1
+"severe abdominal pain, rigid belly, fever",1
+"major trauma, multiple injuries from accident",1
+"severe burn, large area affected",1
+"seizure lasting more than 5 minutes",1
+"fever 100F, sore throat, swollen glands",2
+"persistent vomiting, unable to keep food down",2
+"moderate pain, swelling in joint",2
+"infection, redness, warmth, moderate pain",2
+"moderate fever, chills, body aches",2
+"persistent cough, chest discomfort",2
+"moderate headache, light sensitivity",2
+"urinary symptoms, burning, frequency",2
+"moderate back pain, difficulty moving",2
+"wound infection, pus, redness spreading",2
+"stuffy nose, mild congestion",3
+"slight fatigue, no other issues",3
+"minor ache, no swelling",3
+"mild discomfort, tolerable",3
+"slight irritation, no infection",3
+"minor complaint, feeling mostly fine",3
+"mild symptoms, manageable at home",3
+"slight pain, no interference with activities",3
+"minor issue, no urgent concern",3
+"mild discomfort, improving on its own",3

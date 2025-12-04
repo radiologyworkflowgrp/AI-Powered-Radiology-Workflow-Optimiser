@@ -1,0 +1,36 @@
+{
+    "chexpert_labels": [
+        "No Finding",
+        "Enlarged Cardiomediastinum",
+        "Cardiomegaly",
+        "Lung Opacity",
+        "Lung Lesion",
+        "Edema",
+        "Consolidation",
+        "Pneumonia",
+        "Atelectasis",
+        "Pneumothorax",
+        "Pleural Effusion",
+        "Pleural Other",
+        "Fracture",
+        "Support Devices"
+    ],
+    "label_mappings": {
+        "no_finding": "No Finding",
+        "enlarged_cardiomediastinum": "Enlarged Cardiomediastinum",
+        "cardiomegaly": "Cardiomegaly",
+        "lung_opacity": "Lung Opacity",
+        "lung_lesion": "Lung Lesion",
+        "edema": "Edema",
+        "consolidation": "Consolidation",
+        "pneumonia": "Pneumonia",
+        "atelectasis": "Atelectasis",
+        "pneumothorax": "Pneumothorax",
+        "pleural_effusion": "Pleural Effusion",
+        "pleural_other": "Pleural Other",
+        "fracture": "Fracture",
+        "support_devices": "Support Devices"
+    },
+    "threshold": 0.5,
+    "description": "CheXpert 14-label classification labels for chest X-ray pathology detection"
+}

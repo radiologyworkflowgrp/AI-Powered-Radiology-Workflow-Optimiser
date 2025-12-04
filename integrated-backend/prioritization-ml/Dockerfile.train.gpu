@@ -1,0 +1,35 @@
+# Dockerfile.train.gpu
+FROM pytorch/pytorch:2.2.0-cuda11.8-cudnn8-runtime
+
+ARG USER=developer
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g ${GID} ${USER} || true \
+ && useradd -m -u ${UID} -g ${GID} -s /bin/bash ${USER} || true
+
+WORKDIR /workspace
+COPY . /workspace
+
+RUN python -m pip install --upgrade pip setuptools wheel
+
+RUN python -m pip install --no-cache-dir \
+    transformers==4.40.0 \
+    datasets==2.10.0 \
+    evaluate \
+    accelerate \
+    scikit-learn \
+    tokenizers \
+    sentencepiece \
+    pandas \
+    tqdm
+
+RUN python -m pip install --no-cache-dir fastapi uvicorn python-multipart
+
+RUN mkdir -p /workspace/cache && chown -R ${USER}:${USER} /workspace
+
+USER ${USER}
+ENV HOME=/home/${USER}
+ENV TRANSFORMERS_CACHE=/workspace/cache/huggingface/transformers
+ENV HF_HOME=/workspace/cache/huggingface
+
+ENTRYPOINT ["bash", "-lc"]
