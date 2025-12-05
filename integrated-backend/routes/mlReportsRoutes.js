@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const MLReport = require('../models/MLReport');
+const { MLReport } = require('../models');
 const { body, param, query, validationResult } = require('express-validator');
+const { Op } = require('sequelize');
 
 // Middleware to handle validation errors
 const handleValidationErrors = (req, res, next) => {
@@ -26,18 +27,17 @@ router.post('/',
     body('findings').optional().isString().withMessage('Findings must be text'),
     body('impression').optional().isString().withMessage('Impression must be text'),
     body('recommendation').optional().isString().withMessage('Recommendation must be text'),
-    body('image_url').optional().isURL().withMessage('Image URL must be valid'),
+    body('image_url').optional().isString().withMessage('Image URL must be string'),
     body('doctor_id').optional().isString().withMessage('Doctor ID must be string')
   ],
   handleValidationErrors,
   async (req, res) => {
     try {
-      const reportId = await MLReport.create(req.body);
-      const report = await MLReport.getById(reportId);
-      
+      const report = await MLReport.create(req.body);
+
       res.status(201).json({
         message: 'ML report created successfully',
-        report
+        report: report.toJSON()
       });
     } catch (error) {
       console.error('Error creating ML report:', error);
@@ -60,17 +60,19 @@ router.get('/',
   async (req, res) => {
     try {
       const { limit = 50, offset = 0, status } = req.query;
-      
-      let reports;
-      if (status) {
-        reports = await MLReport.getByStatus(status);
-      } else {
-        reports = await MLReport.getAll(parseInt(limit), parseInt(offset));
-      }
-      
+
+      const where = status ? { report_status: status } : {};
+
+      const reports = await MLReport.findAll({
+        where,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        order: [['created_at', 'DESC']]
+      });
+
       res.json({
         message: 'ML reports retrieved successfully',
-        reports,
+        reports: reports.map(r => r.toJSON()),
         total: reports.length
       });
     } catch (error) {
@@ -91,17 +93,17 @@ router.get('/:id',
   handleValidationErrors,
   async (req, res) => {
     try {
-      const report = await MLReport.getById(req.params.id);
-      
+      const report = await MLReport.findByPk(req.params.id);
+
       if (!report) {
         return res.status(404).json({
           message: 'ML report not found'
         });
       }
-      
+
       res.json({
         message: 'ML report retrieved successfully',
-        report
+        report: report.toJSON()
       });
     } catch (error) {
       console.error('Error fetching ML report:', error);
@@ -121,11 +123,14 @@ router.get('/patient/:patientId',
   handleValidationErrors,
   async (req, res) => {
     try {
-      const reports = await MLReport.getByPatientId(req.params.patientId);
-      
+      const reports = await MLReport.findAll({
+        where: { patient_id: req.params.patientId },
+        order: [['created_at', 'DESC']]
+      });
+
       res.json({
         message: 'Patient ML reports retrieved successfully',
-        reports,
+        reports: reports.map(r => r.toJSON()),
         total: reports.length
       });
     } catch (error) {
@@ -146,24 +151,24 @@ router.put('/:id',
     body('impression').optional().isString().withMessage('Impression must be text'),
     body('recommendation').optional().isString().withMessage('Recommendation must be text'),
     body('confidence_score').optional().isFloat({ min: 0, max: 1 }).withMessage('Confidence score must be between 0 and 1'),
-    body('image_url').optional().isURL().withMessage('Image URL must be valid')
+    body('image_url').optional().isString().withMessage('Image URL must be string')
   ],
   handleValidationErrors,
   async (req, res) => {
     try {
-      const updated = await MLReport.update(req.params.id, req.body);
-      
-      if (!updated) {
+      const report = await MLReport.findByPk(req.params.id);
+
+      if (!report) {
         return res.status(404).json({
           message: 'ML report not found'
         });
       }
-      
-      const report = await MLReport.getById(req.params.id);
-      
+
+      await report.update(req.body);
+
       res.json({
         message: 'ML report updated successfully',
-        report
+        report: report.toJSON()
       });
     } catch (error) {
       console.error('Error updating ML report:', error);
@@ -186,19 +191,23 @@ router.put('/:id/status',
   async (req, res) => {
     try {
       const { status, reviewed_by } = req.body;
-      const updated = await MLReport.updateStatus(req.params.id, status, reviewed_by);
-      
-      if (!updated) {
+
+      const report = await MLReport.findByPk(req.params.id);
+
+      if (!report) {
         return res.status(404).json({
           message: 'ML report not found'
         });
       }
-      
-      const report = await MLReport.getById(req.params.id);
-      
+
+      await report.update({
+        report_status: status,
+        reviewed_by: reviewed_by || report.reviewed_by
+      });
+
       res.json({
         message: 'ML report status updated successfully',
-        report
+        report: report.toJSON()
       });
     } catch (error) {
       console.error('Error updating ML report status:', error);
@@ -218,14 +227,16 @@ router.delete('/:id',
   handleValidationErrors,
   async (req, res) => {
     try {
-      const deleted = await MLReport.delete(req.params.id);
-      
-      if (!deleted) {
+      const report = await MLReport.findByPk(req.params.id);
+
+      if (!report) {
         return res.status(404).json({
           message: 'ML report not found'
         });
       }
-      
+
+      await report.destroy();
+
       res.json({
         message: 'ML report deleted successfully'
       });
@@ -242,8 +253,24 @@ router.delete('/:id',
 // GET /api/ml-reports/stats - Get ML report statistics
 router.get('/stats', async (req, res) => {
   try {
-    const stats = await MLReport.getStats();
-    
+    const [total, pending, processing, completed, failed] = await Promise.all([
+      MLReport.count(),
+      MLReport.count({ where: { report_status: 'pending' } }),
+      MLReport.count({ where: { report_status: 'processing' } }),
+      MLReport.count({ where: { report_status: 'completed' } }),
+      MLReport.count({ where: { report_status: 'failed' } })
+    ]);
+
+    const stats = {
+      total,
+      by_status: {
+        pending,
+        processing,
+        completed,
+        failed
+      }
+    };
+
     res.json({
       message: 'ML report statistics retrieved successfully',
       stats

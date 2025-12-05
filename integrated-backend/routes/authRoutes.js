@@ -1,11 +1,12 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const Patient = require("../models/Patient");
-const Doctor = require("../models/Doctor");
-const Admin = require("../models/Admin");
+const Patient = require("../mongoSchemas/Patient");
+const Doctor = require("../mongoSchemas/Doctor");
+const Admin = require("../mongoSchemas/Admin");
 const redisClient = require("../redisClient");
 const authMiddleware = require("../middleware/authMiddleware");
-const LoginActivity = require("../models/LoginActivity");
+const LoginActivity = require("../mongoSchemas/LoginActivity");
+const User = require("../mongoSchemas/User");
 
 const router = express.Router();
 
@@ -38,37 +39,85 @@ router.post("/register", async (req, res) => {
         }
 
         const userRole = role || "patient";
-        const Model = getModelByRole(userRole);
 
-        // Check if user already exists in the specific collection
-        const existingUser = await Model.findOne({ email });
+        // Check if user already exists in User collection
+        const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ message: `${userRole} already exists with this email` });
         }
 
-        // Create user data based on role
-        const userData = {
-            email,
-            password,
-            name,
-        };
+        let referenceId = null;
+        let profileCreated = false;
 
-        // Add role-specific fields
-        if (userRole === "doctor") {
-            userData.specialty = specialty || "General Medicine";
+        // Create profile in specific collection (using MongoDB models for now as per imports)
+        // Note: The plan mentions Postgres for Patient/Doctor, but imports currently point to Mongo schemas.
+        // We will stick to the existing imports (Mongo) for consistency with current code structure 
+        // unless I change imports to Postgres models. 
+        // HOWEVER, the task was "keep only login details in mongodb and rest of the data in postgresql".
+        // The imports in authRoutes currently are:
+        // const Patient = require("../mongoSchemas/Patient");
+        // const Doctor = require("../mongoSchemas/Doctor");
+
+        // I need to use the Postgres models if I want to store data in Postgres.
+        // But the imports are Mongo. Let's check imports again.
+        // Lines 3-5 imply Mongo schemas.
+        // I should switch to Postgres models here if the goal is Postgres for data.
+
+        // Let's use the Postgres models available via require('../models') if they exist.
+        // I will assume for this step I am modifying the logic to standard separation.
+
+        // Re-importing Postgres models dynamically inside here or changing top imports would be better.
+        // For now, let's just implement the User creation part clearly.
+
+        const { Patient, Doctor, Admin } = require('../models');
+
+        if (userRole === 'patient') {
+            const newPatient = await Patient.create({
+                name,
+                email, // Optional reference
+                // password removed
+            });
+            referenceId = newPatient.id;
+            profileCreated = true;
+        } else if (userRole === 'doctor') {
+            const newDoctor = await Doctor.create({
+                name,
+                email,
+                specialty: specialty || "General Medicine"
+            });
+            referenceId = newDoctor.id;
+            profileCreated = true;
+        } else if (userRole === 'admin') {
+            const newAdmin = await Admin.create({
+                name,
+                email
+            });
+            referenceId = newAdmin.id;
+            profileCreated = true;
         }
 
-        // Create new user in the appropriate collection
-        const newUser = new Model(userData);
+        if (!profileCreated) {
+            return res.status(400).json({ message: "Invalid role" });
+        }
+
+        // Create User for Auth
+        const newUser = new User({
+            email,
+            password, // User model handles hashing
+            role: userRole,
+            referenceId: referenceId.toString()
+        });
+
         await newUser.save();
 
-        // Generate JWT token for auto-login after registration
+        // Generate JWT token
         const token = jwt.sign(
             {
-                userId: newUser._id,
+                userId: newUser._id, // Auth ID
+                referenceId: referenceId, // Profile ID
                 email: newUser.email,
                 role: userRole,
-                profileCompleted: newUser.profileCompleted || false
+                profileCompleted: false
             },
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN }
@@ -77,10 +126,11 @@ router.post("/register", async (req, res) => {
         // Store session in Redis
         const sessionData = {
             userId: newUser._id,
+            referenceId: referenceId,
             email: newUser.email,
-            name: newUser.name,
+            name: name,
             role: userRole,
-            profileCompleted: newUser.profileCompleted || false,
+            profileCompleted: false,
         };
 
         await redisClient.setEx(
@@ -101,10 +151,11 @@ router.post("/register", async (req, res) => {
             message: `${userRole.charAt(0).toUpperCase() + userRole.slice(1)} registered successfully`,
             user: {
                 id: newUser._id,
+                referenceId: referenceId,
                 email: newUser.email,
-                name: newUser.name,
+                name: name,
                 role: userRole,
-                profileCompleted: newUser.profileCompleted || false,
+                profileCompleted: false,
             },
         });
     } catch (error) {
@@ -123,11 +174,8 @@ router.post("/login", async (req, res) => {
             return res.status(400).json({ message: "Please provide email and password" });
         }
 
-        const userRole = role || "patient";
-        const Model = getModelByRole(userRole);
-
-        // Find user in the specific collection
-        const user = await Model.findOne({ email });
+        // Find user in the User collection (MongoDB)
+        const user = await User.findOne({ email });
         if (!user) {
             return res.status(401).json({ message: "Invalid credentials" });
         }
@@ -138,13 +186,35 @@ router.post("/login", async (req, res) => {
             return res.status(401).json({ message: "Invalid credentials" });
         }
 
+        // Fetch profile details from Postgres based on role and referenceId
+        const { Patient, Doctor, Admin } = require('../models');
+        let profile = null;
+        let profileName = "User";
+
+        try {
+            if (user.role === 'patient') {
+                profile = await Patient.findByPk(user.referenceId);
+            } else if (user.role === 'doctor') {
+                profile = await Doctor.findByPk(user.referenceId);
+            } else if (user.role === 'admin') {
+                profile = await Admin.findByPk(user.referenceId);
+            }
+
+            if (profile) {
+                profileName = profile.name;
+            }
+        } catch (dbError) {
+            console.warn(`Failed to fetch profile for user ${user.email}:`, dbError);
+        }
+
         // Generate JWT token
         const token = jwt.sign(
             {
-                userId: user._id,
+                userId: user._id, // Auth ID
+                referenceId: user.referenceId, // Profile ID
                 email: user.email,
-                role: userRole,
-                profileCompleted: user.profileCompleted || false
+                role: user.role,
+                profileCompleted: profile ? (profile.profileCompleted || false) : false
             },
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN }
@@ -153,10 +223,11 @@ router.post("/login", async (req, res) => {
         // Store session in Redis
         const sessionData = {
             userId: user._id,
+            referenceId: user.referenceId,
             email: user.email,
-            name: user.name,
-            role: userRole,
-            profileCompleted: user.profileCompleted || false,
+            name: profileName,
+            role: user.role,
+            profileCompleted: profile ? (profile.profileCompleted || false) : false,
         };
 
         await redisClient.setEx(
@@ -174,8 +245,8 @@ router.post("/login", async (req, res) => {
         });
 
         await LoginActivity.create({
-            userId: user._id,
-            role: userRole,
+            userId: user._id.toString(),
+            role: user.role,
             email: user.email,
             ipAddress: req.ip,
             userAgent: req.get("User-Agent") || "",
@@ -185,10 +256,11 @@ router.post("/login", async (req, res) => {
             message: "Login successful",
             user: {
                 id: user._id,
+                referenceId: user.referenceId,
                 email: user.email,
-                name: user.name,
-                role: userRole,
-                profileCompleted: user.profileCompleted || false,
+                name: profileName,
+                role: user.role,
+                profileCompleted: profile ? (profile.profileCompleted || false) : false,
             },
         });
     } catch (error) {

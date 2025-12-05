@@ -11,28 +11,36 @@ const fs = require("fs");
 const cookieParser = require("cookie-parser");
 const connectDB = require("./db");
 const redisClient = require("./redisClient");
-const { initDatabase, testConnection } = require("./mysql");
+const { initDatabase, testConnection } = require("./postgres");
+const { MLReport: MLReportModel, DICOMImage, Patient: PatientPG, Doctor: DoctorPG } = require("./models"); // Import Postgres models
 const mongoose = require("mongoose");
+const User = require("./mongoSchemas/User"); // Auth User model
 
 // Import RabbitMQ, Logger, and Metrics
 const rabbitmq = require("./rabbitmq");
 const logger = require("./logger");
 const metrics = require("./metrics");
-const Patient = require("./models/Patient");
-const Doctor = require("./models/Doctor");
-const Prescription = require("./models/Prescription");
-const Note = require("./models/Note");
-const Admin = require("./models/Admin");
-const Job = require("./models/Job");
-const RadiologyResult = require("./models/RadiologyResult");
-const MLReport = require("./models/MLReport");
-const ActivityLog = require("./models/ActivityLog");
+// MongoDB Models (core entities)
+const Patient = require("./mongoSchemas/Patient");
+const Doctor = require("./mongoSchemas/Doctor");
+const Prescription = require("./mongoSchemas/Prescription");
+const Note = require("./mongoSchemas/Note");
+const Admin = require("./mongoSchemas/Admin");
+const Job = require("./mongoSchemas/Job");
+const RadiologyResult = require("./mongoSchemas/RadiologyResult");
+const ActivityLog = require("./mongoSchemas/ActivityLog");
+const LoginActivity = require("./mongoSchemas/LoginActivity");
+
+// Import utilities
+const { generateCredentials } = require("./utils/credentialGenerator");
+const { extractUserInfo, getAllowedPatientIds, checkPatientAccess, requireAuth, requireAdmin } = require("./middleware/accessControl");
 
 // Import routes
 const authRoutes = require("./routes/authRoutes");
 const catalogRoutes = require("./routes/catalogRoutes");
 const mlReportsRoutes = require("./routes/mlReportsRoutes");
-const dicomRoutes = require("./routes/dicomRoutes");
+const dicomRoutes = require("./routes/dicomRoutes-postgres");
+const viewerRoutes = require("./routes/viewerRoutes");
 
 const app = express();
 const PORT = 3002;
@@ -40,13 +48,13 @@ const PORT = 3002;
 // Connect to MongoDB
 connectDB();
 
-// Initialize MySQL database
+// Initialize PostgreSQL database
 initDatabase().catch(err => {
-  logger.warn('MySQL initialization failed:', err.message);
+  logger.warn('PostgreSQL initialization failed:', err.message);
   logger.warn('ML reports functionality will be limited');
 });
 testConnection().catch(err => {
-  logger.warn('MySQL connection test failed:', err.message);
+  logger.warn('PostgreSQL connection test failed:', err.message);
 });
 
 // Initialize RabbitMQ connection
@@ -101,6 +109,9 @@ app.use((req, res, next) => {
 });
 
 const apiRouter = express.Router();
+
+// Apply access control middleware to all API routes
+apiRouter.use(extractUserInfo);
 
 apiRouter.use((req, res, next) => {
   console.log(`[DEBUG] API Router received: ${req.method} ${req.url}`);
@@ -179,7 +190,7 @@ apiRouter.get("/radiology-results", async (req, res) => {
       }
     }
 
-    // Get ML reports from MySQL (with error handling)
+    // Get ML reports from PostgreSQL (with error handling)
     let mlReports = [];
     try {
       if (patientId) {
@@ -188,7 +199,11 @@ apiRouter.get("/radiology-results", async (req, res) => {
           // Already returned above, but keep for consistency
           mlReports = [];
         } else {
-          mlReports = await MLReport.getByPatientId(patientId);
+          const reports = await MLReportModel.findAll({
+            where: { patient_id: patientId },
+            order: [['created_at', 'DESC']]
+          });
+          mlReports = reports.map(r => r.toJSON());
         }
       } else {
         // Filter ML reports by allowed patients if doctor
@@ -199,19 +214,23 @@ apiRouter.get("/radiology-results", async (req, res) => {
             mlReports = [];
           } else {
             // Doctor has assigned patients - get all and filter
-            mlReports = await MLReport.getAll();
-            mlReports = mlReports.filter(report =>
-              allowedPatientIds.includes(report.patient_id)
-            );
+            const reports = await MLReportModel.findAll({
+              where: { patient_id: allowedPatientIds },
+              order: [['created_at', 'DESC']]
+            });
+            mlReports = reports.map(r => r.toJSON());
           }
         } else {
           // Not a doctor (admin or no auth) - show all
-          mlReports = await MLReport.getAll();
+          const reports = await MLReportModel.findAll({
+            order: [['created_at', 'DESC']]
+          });
+          mlReports = reports.map(r => r.toJSON());
         }
       }
-    } catch (mysqlError) {
-      console.warn('Failed to fetch ML reports from MySQL:', mysqlError.message);
-      // Continue without ML reports if MySQL is not available
+    } catch (pgError) {
+      console.warn('Failed to fetch ML reports from PostgreSQL:', pgError.message);
+      // Continue without ML reports if PostgreSQL is not available
     }
 
     // Combine results with enhanced status information
@@ -306,13 +325,17 @@ apiRouter.get("/radiology-results/patient/:patientId/recent", async (req, res) =
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
 
-    // Get ML reports from MySQL (with error handling)
+    // Get ML reports from PostgreSQL (with error handling)
     let mlReports = [];
     try {
-      mlReports = await MLReport.getByPatientId(patientId);
-    } catch (mysqlError) {
-      console.warn('Failed to fetch ML reports from MySQL:', mysqlError.message);
-      // Continue without ML reports if MySQL is not available
+      const reports = await MLReportModel.findAll({
+        where: { patient_id: patientId },
+        order: [['created_at', 'DESC']]
+      });
+      mlReports = reports.map(r => r.toJSON());
+    } catch (pgError) {
+      console.warn('Failed to fetch ML reports from PostgreSQL:', pgError.message);
+      // Continue without ML reports if PostgreSQL is not available
     }
 
     // Combine and sort by creation date (newest first)
@@ -390,8 +413,12 @@ apiRouter.get("/radiology-results/status/:patientId", async (req, res) => {
     // Get traditional radiology results from MongoDB
     const radiologyResults = await RadiologyResult.find({ patientId });
 
-    // Get ML reports from MySQL
-    const mlReports = await MLReport.getByPatientId(patientId);
+    // Get ML reports from PostgreSQL
+    const reports = await MLReportModel.findAll({
+      where: { patient_id: patientId },
+      order: [['created_at', 'DESC']]
+    });
+    const mlReports = reports.map(r => r.toJSON());
 
     // Count reports by status
     const statusSummary = {
@@ -479,6 +506,8 @@ apiRouter.get("/patients", async (req, res) => {
   }
 });
 
+
+
 apiRouter.post("/patients", upload.single('file'), async (req, res) => {
   try {
     const patientData = req.body;
@@ -488,34 +517,97 @@ apiRouter.post("/patients", upload.single('file'), async (req, res) => {
       patientData.medical_history = req.file.path;
     }
 
-    // Create a new patient document
-    const newPatient = new Patient(patientData);
+    // Auto-generate credentials if not provided (admin creating patient)
+    let generatedCredentials = null;
+    if (!patientData.email || !patientData.password) {
+      // Generate credentials
+      const tempId = Date.now().toString(); // Use timestamp as temp ID
+      generatedCredentials = generateCredentials(patientData.name, tempId);
+
+      if (!patientData.email) {
+        patientData.email = generatedCredentials.email;
+      }
+      if (!patientData.password) {
+        patientData.password = generatedCredentials.password;
+      }
+
+      console.log(`✅ Auto-generated credentials for patient ${patientData.name}`);
+      console.log(`   Email: ${generatedCredentials.email}`);
+    }
+
+    // Check if user already exists in User collection
+    const existingUser = await User.findOne({ email: patientData.email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Patient already exists with this email" });
+    }
+
+    // 1. Create Patient in PostgreSQL
+    const newPatient = await PatientPG.create({
+      name: patientData.name,
+      email: patientData.email,
+      age: patientData.age,
+      gender: patientData.gender,
+      contact: patientData.contact,
+      address: patientData.address,
+      medical_history: patientData.medical_history,
+      symptoms: Array.isArray(patientData.symptoms) ? patientData.symptoms : (patientData.symptoms ? [patientData.symptoms] : []),
+      vitals: patientData.vitals || {},
+      priority: 'normal', // Default
+      profileCompleted: true // Created by admin
+      // assignedDoctor will be handled separately or added here if ID known
+    });
+
+    console.log(`✅ Patient profile created in PostgreSQL with ID: ${newPatient.id}`);
+
+    // 2. Create User in MongoDB for Auth
+    const newUser = new User({
+      email: patientData.email,
+      password: patientData.password,
+      role: 'patient',
+      referenceId: newPatient.id
+    });
+
+    await newUser.save();
+    console.log(`✅ User credentials created in MongoDB with ID: ${newUser._id}`);
+
 
     // Assign an available doctor
+    // Note: This logic assumes Doctor model is also Postgres or we bridge IDs. 
+    // Existing logic used Mongoose Doctor. Let's keep using Mongoose Doctor for availability check 
+    // IF doctors are staying in Mongo, BUT the plan was to move data to Postgres.
+    // Assuming Doctors are also migrated or we need to look up in Postgres.
+    // Let's use the Postgres Doctor model if available, or fallback to the one imported.
+    // The previous imports: const Doctor = require("./mongoSchemas/Doctor");
+    // We should probably check Postgres Doctor model.
+
+    const { Doctor: DoctorPG } = require("./models");
+
     try {
-      const availableDoctor = await Doctor.findOne({ availability: 'Available' });
+      // Find a doctor in Postgres
+      const availableDoctor = await DoctorPG.findOne({ where: { availability: 'Available' } });
+
       if (availableDoctor) {
-        newPatient.assignedDoctor = {
-          id: availableDoctor._id,
-          name: availableDoctor.name
-        };
+        // Update patient with assigned doctor
+        await newPatient.update({
+          assignedDoctor: {
+            id: availableDoctor.id, // UUID from Postgres
+            name: availableDoctor.name
+          }
+        });
         console.log(`Assigned doctor ${availableDoctor.name} to patient ${newPatient.name}`);
       } else {
-        console.log('No available doctors found for assignment');
+        console.log('No available doctors found for assignment in Postgres');
       }
     } catch (docError) {
       console.error('Error assigning doctor:', docError);
       // Continue without assignment
     }
 
-    // Save to MongoDB
-    await newPatient.save();
-
     // Send to ML prioritization queue if symptoms are provided
     if (patientData.symptoms) {
       try {
         const mlPayload = {
-          patient_id: newPatient._id.toString(),
+          patient_id: newPatient.id, // UUID from Postgres
           patient_name: newPatient.name,
           age: newPatient.age,
           gender: newPatient.gender,
@@ -530,7 +622,7 @@ apiRouter.post("/patients", upload.single('file'), async (req, res) => {
         channel.sendToQueue('priority_queue', Buffer.from(JSON.stringify(mlPayload)), {
           persistent: true
         });
-        logger.info(`Patient ${newPatient._id} sent to ML prioritization queue`);
+        logger.info(`Patient ${newPatient.id} sent to ML prioritization queue`);
       } catch (queueError) {
         logger.error('Failed to send patient to ML queue:', queueError);
         // Continue even if queue fails - patient is already saved
@@ -543,39 +635,35 @@ apiRouter.post("/patients", upload.single('file'), async (req, res) => {
         action: 'patient_added',
         description: `New patient added: ${newPatient.name}`,
         entityType: 'patient',
-        entityId: newPatient._id.toString(),
+        entityId: newPatient.id,
         metadata: {
           patientName: newPatient.name,
           age: newPatient.age,
           gender: newPatient.gender,
-          priority: newPatient.priority,
-          assignedDoctor: newPatient.assignedDoctor
+          // priority: newPatient.priority, // removed from newPatient object if not explicitly set
         }
       });
-
-      // Log activity: Doctor assigned (if applicable)
-      if (newPatient.assignedDoctor) {
-        await ActivityLog.create({
-          action: 'doctor_assigned',
-          description: `Doctor ${newPatient.assignedDoctor.name} assigned to patient ${newPatient.name}`,
-          entityType: 'patient',
-          entityId: newPatient._id.toString(),
-          metadata: {
-            patientName: newPatient.name,
-            doctorName: newPatient.assignedDoctor.name,
-            doctorId: newPatient.assignedDoctor.id
-          }
-        });
-      }
     } catch (logError) {
       console.error('Error creating activity log:', logError);
       // Continue even if logging fails
     }
 
-    res.json({
+    const response = {
       message: "Patient added successfully",
       patient: newPatient,
-    });
+    };
+
+    // Include generated credentials in response if they were auto-generated
+    if (generatedCredentials) {
+      response.credentials = {
+        email: generatedCredentials.email,
+        password: generatedCredentials.password,
+        message: generatedCredentials.message
+      };
+      response.message += " - Login credentials generated";
+    }
+
+    res.json(response);
   } catch (error) {
     console.error("Error saving patient:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -819,14 +907,20 @@ apiRouter.post("/login", async (req, res) => {
     }
 
     // Find user in the specific collection
+    console.log(`[LOGIN DEBUG] Attempting login for email: ${email}, role: ${userRole}`);
     const user = await Model.findOne({ email });
     if (!user) {
+      console.log(`[LOGIN DEBUG] User not found in ${userRole} collection`);
       return res.status(401).json({ message: "Invalid credentials" });
     }
+    console.log(`[LOGIN DEBUG] User found: ${user._id}`);
 
     // Check password
     const isMatch = await user.comparePassword(password);
+    console.log(`[LOGIN DEBUG] Password match result: ${isMatch}`);
+
     if (!isMatch) {
+      console.log(`[LOGIN DEBUG] Password mismatch`);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -1016,15 +1110,20 @@ app.use("/api/ml-reports", mlReportsRoutes);
 // Mount DICOM routes
 app.use("/api/dicom", dicomRoutes);
 
+// Mount Viewer routes (DICOM & PDF viewing)
+app.use("/api/viewer", viewerRoutes);
+
 // Admin debugging routes for MySQL
-app.get("/admin/mysql/reports", async (req, res) => {
+app.get("/admin/reports", async (req, res) => {
   try {
-    const { getRecentReports } = require("./mysql");
     const limit = parseInt(req.query.limit) || 10;
-    const reports = await getRecentReports(limit);
+    const reports = await MLReportModel.findAll({
+      order: [['created_at', 'DESC']],
+      limit: limit
+    });
     res.json({
-      message: "Recent ML reports from MySQL",
-      reports,
+      message: "Recent ML reports from PostgreSQL",
+      reports: reports.map(r => r.toJSON()),
       total: reports.length
     });
   } catch (error) {
@@ -1032,12 +1131,27 @@ app.get("/admin/mysql/reports", async (req, res) => {
   }
 });
 
-app.get("/admin/mysql/stats", async (req, res) => {
+app.get("/admin/stats", async (req, res) => {
   try {
-    const { getReportStats } = require("./mysql");
-    const stats = await getReportStats();
+    const { Op } = require('sequelize');
+
+    // Get stats from PostgreSQL
+    const totalReports = await MLReportModel.count();
+    const pendingReports = await MLReportModel.count({ where: { report_status: 'pending' } });
+    const processingReports = await MLReportModel.count({ where: { report_status: 'processing' } });
+    const completedReports = await MLReportModel.count({ where: { report_status: 'completed' } });
+    const failedReports = await MLReportModel.count({ where: { report_status: 'failed' } });
+
+    const stats = {
+      total: totalReports,
+      pending: pendingReports,
+      processing: processingReports,
+      completed: completedReports,
+      failed: failedReports
+    };
+
     res.json({
-      message: "ML report statistics from MySQL",
+      message: "ML report statistics from PostgreSQL",
       stats
     });
   } catch (error) {

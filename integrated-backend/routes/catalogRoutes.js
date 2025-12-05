@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Job = require('../models/Job');
+const Job = require('../mongoSchemas/Job');
 const redisClient = require('../redisClient');
 const rabbitmq = require('../rabbitmq');
 const metrics = require('../metrics');

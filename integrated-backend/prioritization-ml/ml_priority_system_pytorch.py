@@ -61,7 +61,7 @@ MODEL_FILENAME = "priority_model.pt"
 CONFIG_FILENAME = "model_config.json"
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
-INPUT_QUEUE = os.getenv("INPUT_QUEUE", "cases_in")
+INPUT_QUEUE = os.getenv("INPUT_QUEUE", "priority_queue")
 OUTPUT_QUEUE = os.getenv("OUTPUT_QUEUE", "cases_out")
 DEAD_QUEUE = os.getenv("DEAD_QUEUE", "cases_dead")
 
@@ -481,10 +481,20 @@ async def health():
 # -------------------------
 # RabbitMQ helpers (retry queues, DLQ)
 # -------------------------
+DLX_EXCHANGE = os.getenv("RABBITMQ_DLX", "hospital_dlx")
+
 def declare_queues(channel):
     # Main input/output/dead queues
-    channel.queue_declare(queue=INPUT_QUEUE, durable=True)
-    channel.queue_declare(queue=OUTPUT_QUEUE, durable=True)
+    queue_args = {
+        "x-dead-letter-exchange": DLX_EXCHANGE,
+        "x-message-ttl": 3600000  # 1 hour
+    }
+    
+    # Ensure DLX exists first (idempotent)
+    channel.exchange_declare(exchange=DLX_EXCHANGE, exchange_type='topic', durable=True)
+    
+    channel.queue_declare(queue=INPUT_QUEUE, durable=True, arguments=queue_args)
+    channel.queue_declare(queue=OUTPUT_QUEUE, durable=True, arguments=queue_args)
     channel.queue_declare(queue=DEAD_QUEUE, durable=True)
 
     # Retry queues: each has TTL and dead-letters back to INPUT_QUEUE

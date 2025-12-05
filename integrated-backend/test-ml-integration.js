@@ -1,7 +1,7 @@
 const amqp = require('amqplib');
 const { v4: uuidv4 } = require('uuid');
 
-const RABBITMQ_URL = 'amqp://localhost';
+const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost';
 const INPUT_QUEUE = 'priority_queue';
 const OUTPUT_QUEUE = 'waitlist_queue';
 const TEST_TIMEOUT = 30000; // 30 seconds
