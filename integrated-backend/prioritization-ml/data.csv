@@ -1,0 +1,11 @@
+id,symptoms_text,history_text,label
+case_00000001,radiating pain to left arm started suddenly,,3
+case_00000002,mild headache. rapid pulse 120bpm,asthma,1
+case_00000003,shortness of breath since this morning. light cough after falling from a ladder,,2
+case_00000004,tightness in chest for 2 days,history of hypertension,3
+case_00000005,persistent vomiting for 2 days. head injury worsening over 3 hours,,2
+case_00000006,mild headache started suddenly,,3
+case_00000007,slurred speech intermittent. pulse 50bpm,chronic kidney disease,1
+case_00000008,sore throat progressive over a week,chronic kidney disease,3
+case_00000009,mild headache started suddenly,history of diabetes,3
+case_00000010,head injury intermittent,,3

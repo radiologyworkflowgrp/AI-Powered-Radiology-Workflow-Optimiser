@@ -1,0 +1,11 @@
+id,symptoms_text,history_text,label
+case_000001,radiating pain to left arm started suddenly. deep laceration since this morning. rapid pulse 120bpm,history of hypertension,1
+case_000002,wheezing,smoker,2
+case_000003,deep laceration after falling from a ladder,diabetes,3
+case_000004,fracture after fall worsening over 3 hours,allergic to penicillin,1
+case_000005,head injury intermittent. oxygen sat 88%,diabetes,1
+case_000006,open wound after falling from a ladder,smoker,1
+case_000007,abdominal pain since this morning. head injury started suddenly,,2
+case_000008,severe headache. radiating pain to left arm after falling from a ladder,no significant past history,1
+case_000009,persistent diarrhea since this morning,,3
+case_000010,shivering since this morning. seizures after a meal. BP 80/50; high fever 39.5C; oxygen sat 88%,,1
