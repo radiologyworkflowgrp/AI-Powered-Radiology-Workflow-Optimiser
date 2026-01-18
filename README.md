@@ -7,7 +7,7 @@
 [![Node.js](https://img.shields.io/badge/Backend-Node.js_18-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![Python](https://img.shields.io/badge/ML-Python_3.10-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/AI-PyTorch-EE4C2C?style=for-the-badge&logo=pytorch)](https://pytorch.org/)
-[![Docker](https://img.shields.io/badge/DevOps-Docker-2496ED?style=for-the-badge&logo=docker)](https://www.docker.com/)
+
 
 [**Explore Docs**](#-documentation) · [**Report Bug**](issues/new) · [**Request Feature**](issues/new)
 
